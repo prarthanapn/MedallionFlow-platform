@@ -1,4 +1,146 @@
+# version: "3.8"
+
+# services:
+
+#   postgres:
+#     image: postgres:13
+#     environment:
+#       POSTGRES_USER: airflow
+#       POSTGRES_PASSWORD: airflow
+#       POSTGRES_DB: airflow
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     networks:
+#       - data_platform
+
+#   airflow-webserver:
+#     build:
+#       context: .
+#       dockerfile: ./airflow/Dockerfile
+#     depends_on:
+#       - postgres
+#     environment:
+#       AIRFLOW__CORE__EXECUTOR: LocalExecutor
+#       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+#       AIRFLOW__CORE__FERNET_KEY: '46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho='
+#       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+#       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+#       AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+#       PYTHONPATH: /opt/airflow
+#     volumes:
+#       - ./dags:/opt/airflow/dags
+#       - ./input_data:/opt/airflow/data/input
+#       - ./delta_lake:/opt/airflow/data/delta
+#       - ./spark:/opt/airflow/spark
+#       - ./logs:/opt/airflow/logs
+#     ports:
+#       - "8081:8080"
+#     command: >
+#       bash -c "
+#       airflow db init &&
+#       airflow users create
+#       --username admin
+#       --password admin
+#       --firstname admin
+#       --lastname admin
+#       --role Admin
+#       --email admin@example.com &&
+#       airflow webserver
+#       "
+#     networks:
+#       - data_platform
+
+#   airflow-scheduler:
+#     build:
+#       context: .
+#       dockerfile: ./airflow/Dockerfile
+#     depends_on:
+#       - postgres
+#     environment:
+#       AIRFLOW__CORE__EXECUTOR: LocalExecutor
+#       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+#       AIRFLOW__CORE__FERNET_KEY: '46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho='
+#       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+#       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+#       AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+#       PYTHONPATH: /opt/airflow
+#       # SMTP Configuration for Email Alerts
+#       SMTP_USER: "prarthana.p.n1234@gmail.com"      # <--- Double check your email here
+#       SMTP_PASSWORD: "xwwt rkbp pzss heqt"   # App Password
+#     restart: always
+#     volumes:
+#       - ./dags:/opt/airflow/dags
+#       - ./input_data:/opt/airflow/data/input
+#       - ./delta_lake:/opt/airflow/data/delta
+#       - ./spark:/opt/airflow/spark
+#       - ./logs:/opt/airflow/logs
+#     command: >
+#       bash -c "
+#       rm -f /opt/airflow/airflow-scheduler.pid &&
+#       while ! airflow db check; do sleep 5; done &&
+#       airflow scheduler
+#       "
+#     networks:
+#       - data_platform
+
+#   spark-master:
+#     build: ./spark
+#     command: >
+#       /opt/spark/bin/spark-class
+#       org.apache.spark.deploy.master.Master
+#     environment:
+#       SPARK_MASTER_HOST: spark-master
+#       SPARK_MASTER_PORT: 7077
+#     ports:
+#       - "7077:7077"
+#       - "8080:8080"
+#     volumes:
+#       - ./spark/spark_jobs:/opt/spark_jobs
+#       - ./input_data:/opt/airflow/data/input
+#       - ./delta_lake:/opt/airflow/data/delta
+#     networks:
+#       - data_platform
+
+#   spark-worker:
+#     build: ./spark
+#     depends_on:
+#       - spark-master
+#     command: >
+#       /opt/spark/bin/spark-class
+#       org.apache.spark.deploy.worker.Worker
+#       spark://spark-master:7077
+#     volumes:
+#       - ./spark/spark_jobs:/opt/spark_jobs
+#       - ./input_data:/opt/airflow/data/input
+#       - ./delta_lake:/opt/airflow/data/delta
+#     networks:
+#       - data_platform
+
+#   dashboard:
+#     build: ./dashboard
+#     depends_on:
+#       - spark-master
+#       - airflow-webserver
+#     ports:
+#       - "8501:8501"
+#     volumes:
+#       - ./dashboard:/app
+#       - ./delta_lake:/app/data/delta
+#       - ./logs:/app/logs
+#       - ./input_data:/app/data/input
+#     networks:
+#       - data_platform
+
+# volumes:
+#   postgres_data:
+
+# networks:
+#   data_platform:
+#     driver: bridge
+
+
 services:
+
   postgres:
     image: postgres:13
     environment:
@@ -14,26 +156,25 @@ services:
     build:
       context: .
       dockerfile: ./airflow/Dockerfile
+    depends_on:
+      - postgres
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CORE__FERNET_KEY: '46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho='
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
       PYTHONPATH: /opt/airflow
     volumes:
       - ./dags:/opt/airflow/dags
-      - ./data:/opt/airflow/data
+      - ./input_data:/opt/airflow/data/input
+      - ./delta_lake:/opt/airflow/data/delta
       - ./spark:/opt/airflow/spark
       - ./logs:/opt/airflow/logs
     ports:
-      - "8081:8080"
-    depends_on:
-      postgres:
-        condition: service_started
-      airflow-init:
-        condition: service_completed_successfully
-    command: webserver
+      - "8081:8080"  # Host 8081 maps to container 8080
+    command: airflow webserver
     networks:
       - data_platform
 
@@ -41,60 +182,78 @@ services:
     build:
       context: .
       dockerfile: ./airflow/Dockerfile
+    depends_on:
+      - postgres
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CORE__FERNET_KEY: '46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho='
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
       PYTHONPATH: /opt/airflow
+      SMTP_USER: "prarthana.p.n1234@gmail.com"
+      SMTP_PASSWORD: "xwwt rkbp pzss heqt"
+    restart: always
     volumes:
       - ./dags:/opt/airflow/dags
-      - ./data:/opt/airflow/data
+      - ./input_data:/opt/airflow/data/input
+      - ./delta_lake:/opt/airflow/data/delta
       - ./spark:/opt/airflow/spark
       - ./logs:/opt/airflow/logs
-    depends_on:
-      postgres:
-        condition: service_started
-      airflow-init:
-        condition: service_completed_successfully
-    command: scheduler
+    command: airflow scheduler
     networks:
       - data_platform
 
-  airflow-init:
-    build:
-      context: .
-      dockerfile: ./airflow/Dockerfile
-    environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CORE__FERNET_KEY: '46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho='
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
-      PYTHONPATH: /opt/airflow
-    volumes:
-      - ./dags:/opt/airflow/dags
-      - ./data:/opt/airflow/data
-      - ./spark:/opt/airflow/spark
-      - ./logs:/opt/airflow/logs
-    depends_on:
-      postgres:
-        condition: service_started
+  spark-master:
+    build: ./spark
     command: >
-      bash -c "airflow db init && airflow users create
-      --username admin
-      --firstname Admin
-      --lastname User
-      --role Admin
-      --email admin@example.com
-      --password admin || true"
+      /opt/spark/bin/spark-class
+      org.apache.spark.deploy.master.Master
+    environment:
+      SPARK_MASTER_HOST: spark-master
+      SPARK_MASTER_PORT: 7077
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    volumes:
+      - ./spark/spark_jobs:/opt/spark_jobs
+      - ./input_data:/opt/airflow/data/input
+      - ./delta_lake:/opt/airflow/data/delta
     networks:
       - data_platform
 
-  # Spark master/worker and dashboard services are temporarily removed
-  # to focus on testing the Airflow pipeline. They can be re-added
-  # once dedicated Spark and dashboard images are configured.
+  spark-worker:
+    build: ./spark
+    depends_on:
+      - spark-master
+    command: >
+      /opt/spark/bin/spark-class
+      org.apache.spark.deploy.worker.Worker
+      spark://spark-master:7077
+    volumes:
+      - ./spark/spark_jobs:/opt/spark_jobs
+      - ./input_data:/opt/airflow/data/input
+      - ./delta_lake:/opt/airflow/data/delta
+    networks:
+      - data_platform
+
+  dashboard:
+    build: ./dashboard
+    depends_on:
+      - spark-master
+      - airflow-webserver
+    ports:
+      - "8501:8501"
+    environment:
+      AIRFLOW_URL: http://airflow-webserver:8080
+    volumes:
+      - ./dashboard:/app
+      - ./delta_lake:/app/data/delta
+      - ./logs:/app/logs
+      - ./input_data:/app/data/input
+    networks:
+      - data_platform
 
 volumes:
   postgres_data:
