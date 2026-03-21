@@ -37,7 +37,7 @@ It supports both:
 
 ## Architecture
 
-The following flow is based on the architecture you shared and aligned to the current project implementation.
+The platform is organized across source, orchestration, processing, and storage layers.
 
 ```mermaid
 flowchart TD
@@ -426,10 +426,6 @@ docker-compose restart airflow-webserver airflow-scheduler
 - deploy to a cloud-backed object storage environment
 
 ---
-
-## Author
-
-**Prarthana P N**
 
 If you want, the next step can be:
 
