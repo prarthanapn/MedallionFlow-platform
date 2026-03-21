@@ -5,6 +5,13 @@ import requests
 import plotly.graph_objects as go
 import shutil
 import json
+import re
+import sqlite3
+
+try:
+    import duckdb  # type: ignore
+except Exception:
+    duckdb = None
 
 # ---------------------------------------------------
 # Configuration
@@ -23,6 +30,10 @@ AIRFLOW_DAG_ID = "event_driven_data_pipeline"
 
 AIRFLOW_USERNAME = "admin"
 AIRFLOW_PASSWORD = "admin"
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
 
 # ---------------------------------------------------
 # Streamlit Setup
@@ -128,6 +139,178 @@ def get_layer_metrics(layer_name):
     return {}
 
 
+def get_available_tables():
+    """Return non-empty layer DataFrames that can be queried."""
+    tables = {}
+    if not bronze_df.empty:
+        tables["bronze"] = bronze_df.copy()
+    if not silver_df.empty:
+        tables["silver"] = silver_df.copy()
+    if not gold_df.empty:
+        tables["gold"] = gold_df.copy()
+    return tables
+
+
+def build_schema_context(tables):
+    chunks = []
+    for table_name, df in tables.items():
+        schema = ", ".join([f"{c} ({str(df[c].dtype)})" for c in df.columns])
+        sample = df.head(3).to_dict(orient="records")
+        chunks.append(
+            f"Table: {table_name}\n"
+            f"Columns: {schema}\n"
+            f"Sample rows: {json.dumps(sample, default=str)}\n"
+        )
+    return "\n".join(chunks)
+
+
+def call_llm(messages, temperature=0.0):
+    if not OPENAI_API_KEY:
+        return None
+
+    try:
+        response = requests.post(
+            f"{OPENAI_API_BASE}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": OPENAI_MODEL,
+                "messages": messages,
+                "temperature": temperature,
+            },
+            timeout=30,
+        )
+        if response.status_code != 200:
+            return None
+        data = response.json()
+        return data["choices"][0]["message"]["content"].strip()
+    except Exception:
+        return None
+
+
+def extract_sql(text):
+    if not text:
+        return None
+
+    code_block = re.search(r"```sql\s*(.*?)```", text, flags=re.DOTALL | re.IGNORECASE)
+    if code_block:
+        return code_block.group(1).strip()
+
+    inline = re.search(r"(?is)select\s+.*", text)
+    if inline:
+        return inline.group(0).strip()
+
+    return text.strip()
+
+
+def nl_to_sql(question, tables):
+    schema_context = build_schema_context(tables)
+    table_list = ", ".join(tables.keys())
+
+    sql_dialect = "DuckDB" if duckdb is not None else "SQLite"
+    system_prompt = (
+        "You are a data analyst SQL assistant. "
+        f"Generate a single SELECT-only SQL query for {sql_dialect}. "
+        "Use only the provided table names and columns. "
+        "Never generate INSERT/UPDATE/DELETE/CREATE/DROP/ALTER."
+    )
+    user_prompt = (
+        f"Available tables: {table_list}\n\n"
+        f"{schema_context}\n"
+        f"Question: {question}\n\n"
+        "Return only SQL."
+    )
+
+    llm_output = call_llm(
+        [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+    )
+
+    if llm_output:
+        sql = extract_sql(llm_output)
+        if sql:
+            return sql
+
+    # Safe fallback when API key is absent/unavailable
+    q = question.lower()
+    if "count" in q and "gold" in q:
+        return "SELECT COUNT(*) AS total_rows FROM gold;"
+    if "count" in q and "silver" in q:
+        return "SELECT COUNT(*) AS total_rows FROM silver;"
+    if "count" in q and "bronze" in q:
+        return "SELECT COUNT(*) AS total_rows FROM bronze;"
+    if "top" in q:
+        return "SELECT * FROM gold LIMIT 10;" if "gold" in tables else f"SELECT * FROM {list(tables.keys())[0]} LIMIT 10;"
+
+    return f"SELECT * FROM {list(tables.keys())[0]} LIMIT 20;"
+
+
+def is_safe_select(sql):
+    if not sql:
+        return False
+    lowered = sql.strip().lower().rstrip(";")
+    blocked = ["insert ", "update ", "delete ", "drop ", "alter ", "create ", "truncate "]
+    return lowered.startswith("select") and not any(token in lowered for token in blocked)
+
+
+def run_sql_on_layers(sql, tables):
+    if duckdb is not None:
+        conn = duckdb.connect(database=":memory:")
+        try:
+            for name, df in tables.items():
+                conn.register(name, df)
+            return conn.execute(sql).df()
+        finally:
+            conn.close()
+
+    conn = sqlite3.connect(":memory:")
+    try:
+        for name, df in tables.items():
+            df.to_sql(name, conn, index=False, if_exists="replace")
+        return pd.read_sql_query(sql, conn)
+    finally:
+        conn.close()
+
+
+def humanize_answer(question, sql, result_df):
+    if result_df.empty:
+        return "I could not find matching records for that question in the available data."
+
+    preview = result_df.head(10).to_dict(orient="records")
+    llm_output = call_llm(
+        [
+            {
+                "role": "system",
+                "content": "You explain SQL query outputs to non-technical users in concise plain English.",
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Question: {question}\n"
+                    f"SQL: {sql}\n"
+                    f"Rows returned: {len(result_df)}\n"
+                    f"Preview: {json.dumps(preview, default=str)}\n"
+                    "Give a short human-readable answer."
+                ),
+            },
+        ],
+        temperature=0.2,
+    )
+
+    if llm_output:
+        return llm_output
+
+    first_row = result_df.iloc[0].to_dict()
+    return (
+        f"I ran your question as SQL and found {len(result_df)} result row(s). "
+        f"The first row is: {first_row}"
+    )
+
+
 # ---------------------------------------------------
 # Trigger Airflow DAG
 # ---------------------------------------------------
@@ -220,7 +403,7 @@ st.sidebar.title("Navigation")
 
 page = st.sidebar.radio(
     "Go To",
-    ["Overview", "Data Layers", "Upload Data", "Pipeline Status"]
+    ["Overview", "Data Layers", "Upload Data", "Pipeline Status", "AI Analyst"]
 )
 
 st.sidebar.markdown("---")
@@ -449,6 +632,62 @@ elif page == "Pipeline Status":
                         if stop_pipeline(run["dag_run_id"]):
                             st.success(f"Run {run['dag_run_id']} stopped!")
                             st.rerun()
+
+# ---------------------------------------------------
+# AI Analyst
+# ---------------------------------------------------
+
+elif page == "AI Analyst":
+
+    st.subheader("Ask Data In Plain English")
+    st.caption("The agent converts your question to SQL over Bronze/Silver/Gold and explains the result.")
+
+    available_tables = get_available_tables()
+    if not available_tables:
+        st.warning("No data found in Bronze/Silver/Gold yet. Run the pipeline first.")
+    else:
+        st.write("Queryable tables:", ", ".join(available_tables.keys()))
+
+        if not OPENAI_API_KEY:
+            st.info(
+                "OPENAI_API_KEY is not set. SQL generation will use fallback rules. "
+                "Set OPENAI_API_KEY in docker-compose for full natural-language understanding."
+            )
+
+        if duckdb is None:
+            st.warning(
+                "duckdb is not available in this container. Running AI SQL with SQLite fallback. "
+                "You can still query data, but some advanced SQL syntax may differ."
+            )
+
+        user_question = st.text_area(
+            "Ask your question",
+            placeholder="Example: What are the top 5 locations by total_spent in gold layer?",
+            height=120,
+        )
+
+        if st.button("Run AI Query", type="primary"):
+            if not user_question.strip():
+                st.warning("Please enter a question first.")
+            else:
+                try:
+                    sql = nl_to_sql(user_question, available_tables)
+                    st.markdown("### Generated SQL")
+                    st.code(sql, language="sql")
+
+                    if not is_safe_select(sql):
+                        st.error("Generated query was blocked because it is not a safe SELECT statement.")
+                    else:
+                        result = run_sql_on_layers(sql, available_tables)
+                        st.markdown("### Result")
+                        st.dataframe(result, use_container_width=True)
+
+                        answer = humanize_answer(user_question, sql, result)
+                        st.markdown("### Human-Readable Answer")
+                        st.write(answer)
+
+                except Exception as e:
+                    st.error(f"AI query failed: {e}")
 
 # ---------------------------------------------------
 # Footer

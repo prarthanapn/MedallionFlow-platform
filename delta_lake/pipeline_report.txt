@@ -1,16 +1,16 @@
 PIPELINE EXECUTION REPORT
 =========================
-Run ID: manual__2026-03-15T14:56:17.342420+00:00
-Date:   2026-03-15 14:57:47
+Run ID: manual__2026-03-21T05:16:23.437729+00:00
+Date:   2026-03-21 05:19:26
 
 [BRONZE LAYER]
- - Status: No metrics found (Job may have failed or skipped)
+ - total_records: 10000
 
 [SILVER LAYER]
- - total_records: 891
+ - total_records: 10000
  - duplicates_removed: 0
- - null_cells_filled: 866
+ - null_cells_filled: 6826
 
 [GOLD LAYER]
- - total_records: 891
+ - total_records: 10000
 

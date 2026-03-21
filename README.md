@@ -76,6 +76,7 @@ Prahara/
 - **Delta Lake managed storage** (schema evolution, versions)
 - **Airflow orchestration** with event-driven and scheduled DAGs
 - **Streamlit dashboard** for upload, monitoring, manual triggers
+- **AI Analyst**: ask questions in plain English, auto-convert to SQL on Bronze/Silver/Gold, and get a human-readable answer
 - **Airflow REST API DAG trigger** from dashboard
 - **Quality checks** in Gold layer and audit history
 - **Live pipeline metrics** and data previews
@@ -95,6 +96,32 @@ Prahara/
 3. Upload CSV in dashboard and run pipeline.
 
 4. If Airflow API returns 401, make sure Airflow auth backend is configured and credentials are correct (`admin/admin` by default).
+
+## AI Analyst (Natural Language to SQL)
+
+The dashboard includes an **AI Analyst** page that:
+- accepts human-language questions,
+- generates SQL over `bronze`, `silver`, and `gold` data,
+- runs the SQL, and
+- returns a plain-English explanation.
+
+### Optional LLM Configuration
+
+To enable full natural-language understanding, set these env vars before starting Compose:
+
+```bash
+OPENAI_API_KEY=your_api_key
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_API_BASE=https://api.openai.com/v1
+```
+
+Then run:
+
+```bash
+docker-compose up -d --build
+```
+
+If `OPENAI_API_KEY` is not set, the app still works with a safe rule-based SQL fallback.
 
 ## How to Add New Data
 
