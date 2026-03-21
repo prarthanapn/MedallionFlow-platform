@@ -4,3 +4,5 @@ __pycache__/
 data/delta/
 logs/
 data/input/titanic_new.csv
+delta_lake/
+input_data/
