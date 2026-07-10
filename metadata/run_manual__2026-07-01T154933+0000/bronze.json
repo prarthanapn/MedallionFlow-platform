@@ -1,0 +1,15 @@
+{
+    "layer": "Bronze",
+    "source": "titanic.csv",
+    "input_rows": 0,
+    "output_rows": 0,
+    "schema": [],
+    "start_time": "2026-07-01 15:54:53",
+    "end_time": "2026-07-01 15:54:56",
+    "duration": "2.86 sec",
+    "status": "FAILED",
+    "job": "bronze_job",
+    "output": "delta/bronze",
+    "app_name": "BronzeJob",
+    "exception": "[PATH_NOT_FOUND] Path does not exist: file:/opt/airflow/data/input/titanic.csv."
+}

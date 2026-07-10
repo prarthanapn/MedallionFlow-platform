@@ -8,12 +8,30 @@ import requests
 import streamlit as st
 
 
-DATA_DIR = "/app/data"
-BRONZE_PATH = os.path.join(DATA_DIR, "delta", "bronze")
-SILVER_PATH = os.path.join(DATA_DIR, "delta", "silver")
-GOLD_PATH = os.path.join(DATA_DIR, "delta", "gold")
-INPUT_PATH = os.path.join(DATA_DIR, "input")
-METRICS_DIR = os.path.join(DATA_DIR, "delta", "metrics")
+# Detect if we are running inside Docker
+IS_DOCKER = os.environ.get("AIRFLOW_URL") is not None
+
+if IS_DOCKER:
+    DATA_DIR = "/app/data"
+    BRONZE_PATH = os.path.join(DATA_DIR, "delta", "bronze")
+    SILVER_PATH = os.path.join(DATA_DIR, "delta", "silver")
+    GOLD_PATH = os.path.join(DATA_DIR, "delta", "gold")
+    INPUT_PATH = os.path.join(DATA_DIR, "input")
+    METRICS_DIR = os.path.join(DATA_DIR, "delta", "metrics")
+    METADATA_DIR = "/app/metadata"
+else:
+    # Running locally on host machine
+    BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+    PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
+    
+    DATA_DIR = os.path.join(PROJECT_ROOT, "delta_lake")
+    BRONZE_PATH = os.path.join(DATA_DIR, "bronze")
+    SILVER_PATH = os.path.join(DATA_DIR, "silver")
+    GOLD_PATH = os.path.join(DATA_DIR, "gold")
+    INPUT_PATH = os.path.join(PROJECT_ROOT, "input_data")
+    METRICS_DIR = os.path.join(DATA_DIR, "metrics")
+    METADATA_DIR = os.path.join(PROJECT_ROOT, "metadata")
+
 QUEUE_FILE_PATH = os.path.join(INPUT_PATH, "upload_queue.json")
 
 AIRFLOW_URL = os.getenv("AIRFLOW_URL", "http://airflow-webserver:8080")
@@ -106,98 +124,134 @@ st.markdown(
     """
     <style>
     :root {
-        --bg: #FAF4EA;
-        --panel: #FFFFFF;
-        --panel-soft: #F3E8D7;
-        --text: #000000;
-        --muted: #000000;
-        --line: #000000;
-        --shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
-        --brand: #C8A97E;
-        --brand-deep: #BFA37A;
-        --good: #D9C27A;
-        --warn: #C8A97E;
-        --bad: #9A7B5F;
+        --bg-gradient: linear-gradient(135deg, #1f1c2c 0%, #0e153a 100%);
+        --panel: rgba(255, 255, 255, 0.1);
+        --panel-soft: rgba(255, 255, 255, 0.05);
+        --text: #ffffff;
+        --muted: #a0a5b5;
+        --line: rgba(255, 255, 255, 0.15);
+        --shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+        --brand: rgba(255, 255, 255, 0.15);
+        --brand-deep: rgba(255, 255, 255, 0.25);
+        --good: rgba(217, 194, 122, 0.3);
+        --warn: rgba(200, 169, 126, 0.3);
+        --bad: rgba(154, 123, 95, 0.3);
     }
 
+    /* Soft Gradient Background with Blobs */
     .stApp {
-        background:
-            radial-gradient(circle at top left, rgba(200, 169, 126, 0.18), transparent 28%),
-            radial-gradient(circle at top right, rgba(217, 194, 122, 0.15), transparent 28%),
-            linear-gradient(180deg, #FFFFFF 0%, var(--bg) 100%);
+        background: var(--bg-gradient);
+        background-attachment: fixed;
+    }
+    
+    .stApp::before {
+        content: '';
+        position: fixed;
+        top: -10%; left: -10%;
+        width: 60vw; height: 60vw;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(138, 43, 226, 0.15) 0%, transparent 60%);
+        filter: blur(100px);
+        z-index: -1;
+    }
+    .stApp::after {
+        content: '';
+        position: fixed;
+        bottom: -10%; right: -10%;
+        width: 60vw; height: 60vw;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(0, 191, 255, 0.15) 0%, transparent 60%);
+        filter: blur(100px);
+        z-index: -1;
     }
 
+    /* Sidebar Glass */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #C8A97E 0%, #B8946D 100%);
-        border-right: 1px solid #000000;
+        background: rgba(20, 20, 30, 0.4) !important;
+        backdrop-filter: blur(24px) !important;
+        -webkit-backdrop-filter: blur(24px) !important;
+        border-right: 1px solid var(--line) !important;
+        box-shadow: 2px 0 32px rgba(0,0,0,0.3);
     }
 
     [data-testid="stSidebar"] * {
-        color: #000000;
+        color: var(--text);
     }
 
+    /* Nav items */
     [data-testid="stSidebar"] [role="radiogroup"] > label {
         background: transparent;
         border: 1px solid transparent;
-        border-radius: 14px;
-        padding: 0.5rem 0.75rem;
-        margin-bottom: 0.35rem;
-        transition: all 0.2s ease;
+        border-radius: 16px;
+        padding: 0.6rem 0.8rem;
+        margin-bottom: 0.4rem;
+        transition: all 0.3s ease;
     }
 
     [data-testid="stSidebar"] [role="radiogroup"] > label:hover {
-        background: rgba(255, 255, 255, 0.55);
-        border-color: #000000;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.15);
     }
 
     [data-testid="stSidebar"] [role="radiogroup"] > label[data-baseweb="radio"] input:checked + div {
         font-weight: 700;
+        letter-spacing: 0.5px;
     }
 
+    /* Active Nav Item Glow */
     [data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {
-        background: linear-gradient(135deg, #F7F3E9, #E6D5B8);
-        border-color: #000000;
-        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-color: rgba(255, 255, 255, 0.3);
+        box-shadow: 0 4px 20px rgba(255, 255, 255, 0.1);
     }
 
+    /* Hero */
     .hero {
-        background: linear-gradient(135deg, #E6D5B8 0%, #F7F3E9 45%, #D9C27A 100%);
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 24px;
         padding: 28px 30px;
-        color: #000000;
+        color: var(--text);
         box-shadow: var(--shadow);
         margin-bottom: 1.5rem;
     }
 
-    .hero-top,
-    .section-title,
-    .side-heading,
-    .mini-inline {
+    .hero-top, .section-title, .side-heading, .mini-inline {
         display: flex;
         align-items: center;
         gap: 0.75rem;
     }
+    
+    /* Icon Containers */
+    .hero-top svg, .section-title svg, .side-heading svg, .metric-title-row svg {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 50%;
+        padding: 6px;
+        box-sizing: content-box;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }
 
-    .hero-kicker,
-    .section-kicker,
-    .panel-label,
-    .metric-label,
-    .status-meta,
-    .upload-note,
-    .footer-note {
+    .hero-kicker, .section-kicker, .panel-label, .metric-label, .status-meta, .upload-note, .footer-note, .detail-label, .run-id, .run-subtitle {
         color: var(--muted);
         font-size: 0.95rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        font-weight: 600;
     }
 
-    .hero .hero-kicker,
-    .hero .hero-copy {
-        color: #000000;
+    .hero .hero-kicker, .hero .hero-copy {
+        color: var(--text);
     }
 
-    .hero h1,
-    .section-title h3,
-    .side-heading h3 {
+    .hero h1, .section-title h3, .side-heading h3 {
         margin: 0;
+        color: var(--text);
+        font-weight: 800;
     }
 
     .hero h1 {
@@ -213,9 +267,7 @@ st.markdown(
         line-height: 1.6;
     }
 
-    .hero-badge,
-    .status-badge,
-    .file-chip {
+    .hero-badge, .status-badge, .file-chip, .run-file {
         display: inline-flex;
         align-items: center;
         gap: 0.45rem;
@@ -223,21 +275,20 @@ st.markdown(
         padding: 0.35rem 0.8rem;
         font-size: 0.85rem;
         font-weight: 600;
+        background: rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        color: var(--text);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
 
-    .hero-badge {
-        background: rgba(255, 255, 255, 0.9);
-        color: #000000;
-        border: 1px solid #000000;
-    }
-
-    .section-shell,
-    .panel-card,
-    .upload-card,
-    .status-card {
+    .section-shell, .panel-card, .upload-card, .status-card, .run-card, .detail-card, .dag-option, div[data-testid="stMetric"], .side-panel {
         background: var(--panel);
-        border: 1px solid rgba(22, 32, 51, 0.08);
-        border-radius: 22px;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid var(--line);
+        border-radius: 20px;
         box-shadow: var(--shadow);
     }
 
@@ -246,21 +297,25 @@ st.markdown(
         margin-bottom: 1rem;
     }
 
+    /* Metric Tiles (Bronze, Silver, Gold) */
     .metric-tile {
         border-radius: 22px;
         padding: 1.15rem;
-        color: #000000;
+        color: var(--text);
         box-shadow: var(--shadow);
         min-height: 168px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
         margin-bottom: 1rem;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.25);
     }
 
-    .metric-tile.bronze { background: linear-gradient(145deg, #C8A97E 0%, #B8946D 100%); }
-    .metric-tile.silver { background: linear-gradient(145deg, #E6D5B8 0%, #D9C8A8 100%); }
-    .metric-tile.gold { background: linear-gradient(145deg, #D9C27A 0%, #C8B168 100%); }
+    .metric-tile.bronze { background: linear-gradient(145deg, rgba(200, 169, 126, 0.3) 0%, rgba(184, 148, 109, 0.05) 100%); }
+    .metric-tile.silver { background: linear-gradient(145deg, rgba(230, 213, 184, 0.3) 0%, rgba(217, 200, 168, 0.05) 100%); }
+    .metric-tile.gold { background: linear-gradient(145deg, rgba(217, 194, 122, 0.3) 0%, rgba(200, 177, 104, 0.05) 100%); }
 
     .metric-title-row {
         display: flex;
@@ -271,36 +326,38 @@ st.markdown(
 
     .metric-value {
         font-size: 2.1rem;
-        font-weight: 700;
+        font-weight: 800;
         line-height: 1;
         margin-top: 0.5rem;
     }
 
     .metric-desc {
-        color: #000000;
+        color: var(--text);
         font-size: 0.9rem;
         line-height: 1.45;
+        font-weight: 500;
+        opacity: 0.9;
     }
 
-    .panel-card,
-    .upload-card,
-    .status-card {
+    .panel-card, .upload-card, .status-card, .run-card {
         padding: 1rem 1.1rem;
         margin-bottom: 1rem;
     }
 
     .upload-card {
-        background: linear-gradient(180deg, #FFFFFF 0%, #F7F3E9 100%);
+        background: rgba(255, 255, 255, 0.05);
         border-style: dashed;
-        border-width: 1.5px;
-        border-color: #C8A97E;
+        border-width: 2px;
+        border-color: rgba(255, 255, 255, 0.3);
     }
 
     .status-badge {
-        color: #FFFFFF;
+        color: #ffffff;
         text-transform: capitalize;
         justify-content: center;
         min-width: 126px;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        border: none;
     }
 
     .side-heading {
@@ -308,17 +365,11 @@ st.markdown(
     }
 
     .side-panel {
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid #000000;
-        border-radius: 18px;
         padding: 0.9rem;
         margin-top: 0.8rem;
     }
 
     .file-chip {
-        background: #FFFDF8;
-        color: #000000;
-        border: 1px solid #000000;
         margin: 0 0.45rem 0.45rem 0;
     }
 
@@ -327,59 +378,23 @@ st.markdown(
         padding: 0.5rem 0 0.25rem 0;
     }
 
-    .run-card {
-        background: var(--panel);
-        border: 1px solid rgba(22, 32, 51, 0.08);
-        border-radius: 22px;
-        box-shadow: var(--shadow);
-        padding: 1rem 1.1rem;
-        margin-bottom: 1rem;
-    }
-
     .run-title {
         display: flex;
         align-items: center;
         gap: 0.7rem;
         font-size: 1.15rem;
-        font-weight: 700;
+        font-weight: 800;
         color: var(--text);
         margin-bottom: 0.3rem;
     }
 
-    .run-subtitle,
-    .run-id {
-        color: var(--muted);
-        font-size: 0.95rem;
-        line-height: 1.5;
-    }
-
     .run-file {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.45rem;
-        background: #FFFDF8;
-        color: #000000;
-        border: 1px solid #000000;
-        border-radius: 999px;
-        padding: 0.35rem 0.8rem;
-        font-size: 0.86rem;
-        font-weight: 600;
         margin-top: 0.7rem;
     }
 
-    .detail-card {
-        background: var(--panel-soft);
-        border: 1px solid var(--line);
-        border-radius: 18px;
+    .detail-card, .dag-option, div[data-testid="stMetric"] {
         padding: 1rem;
-        min-height: 112px;
         margin-bottom: 1rem;
-    }
-
-    .detail-label {
-        color: var(--muted);
-        font-size: 0.9rem;
-        margin-bottom: 0.45rem;
     }
 
     .detail-value {
@@ -390,91 +405,68 @@ st.markdown(
         word-break: break-word;
     }
 
-    .dag-option {
-        background: var(--panel-soft);
-        border: 1px solid var(--line);
-        border-radius: 18px;
-        padding: 0.9rem 1rem;
-        margin-bottom: 1rem;
-    }
-
-    .stButton > button,
-    .stDownloadButton > button,
-    .stLinkButton > a {
-        border-radius: 12px !important;
+    /* Glass Buttons */
+    .stButton > button, .stDownloadButton > button, .stLinkButton > a {
+        border-radius: 20px !important;
         min-height: 2.9rem;
-        font-weight: 600 !important;
+        font-weight: 700 !important;
+        background: rgba(255, 255, 255, 0.15) !important;
+        backdrop-filter: blur(16px) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
+        color: var(--text) !important;
+        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.1) !important;
+        transition: all 0.3s ease !important;
     }
 
-    .stButton > button {
-        background: linear-gradient(135deg, var(--brand) 0%, var(--brand-deep) 100%);
-        color: white;
-        border: none;
+    .stButton > button:hover, .stDownloadButton > button:hover, .stLinkButton > a:hover {
+        background: rgba(255, 255, 255, 0.25) !important;
+        backdrop-filter: blur(20px) !important;
+        -webkit-backdrop-filter: blur(20px) !important;
+        border-color: rgba(255, 255, 255, 0.5) !important;
+        box-shadow: 0 8px 24px rgba(255, 255, 255, 0.15) !important;
+        color: #ffffff !important;
     }
 
-    .stButton > button:hover {
-        background: linear-gradient(135deg, #D2B48C 0%, #BFA37A 100%);
-        color: #000000;
-    }
-
+    /* Selectors & Dropdowns */
     div[data-baseweb="select"] > div {
-        background: #FFFFFF !important;
-        color: #000000 !important;
-        border: 1px solid #000000 !important;
+        background: rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(16px) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
+        color: var(--text) !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 16px !important;
     }
 
-    div[data-baseweb="select"] input {
-        color: #000000 !important;
+    div[data-baseweb="select"] input { color: var(--text) !important; }
+    div[data-baseweb="select"] svg { fill: var(--text) !important; }
+
+    div[data-baseweb="popover"], div[role="listbox"], ul[data-testid="stSelectboxVirtualDropdown"] {
+        background: rgba(30, 30, 45, 0.8) !important;
+        backdrop-filter: blur(24px) !important;
+        -webkit-backdrop-filter: blur(24px) !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 16px !important;
+        box-shadow: var(--shadow) !important;
     }
 
-    div[data-baseweb="select"] svg {
-        fill: #000000 !important;
-    }
-
-    div[data-baseweb="popover"] {
-        background: #FFFFFF !important;
-    }
-
-    div[data-baseweb="popover"] * {
-        color: #000000 !important;
-    }
-
-    div[role="listbox"] {
-        background: #FFFFFF !important;
-        border: 1px solid #000000 !important;
-        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12) !important;
-    }
-
-    div[role="option"] {
-        background: #FFFFFF !important;
-        color: #000000 !important;
-        opacity: 1 !important;
+    div[data-baseweb="popover"] *, ul[data-testid="stSelectboxVirtualDropdown"] li {
+        color: var(--text) !important;
+        background: transparent !important;
     }
 
     div[role="option"]:hover {
-        background: #F3E8D7 !important;
-        color: #000000 !important;
+        background: rgba(255, 255, 255, 0.15) !important;
     }
 
-    ul[data-testid="stSelectboxVirtualDropdown"] {
-        background: #FFFFFF !important;
-        border: 1px solid #000000 !important;
-    }
-
-    ul[data-testid="stSelectboxVirtualDropdown"] li {
-        background: #FFFFFF !important;
-        color: #000000 !important;
-    }
-
-    div[data-testid="stMetric"] {
-        background: var(--panel-soft);
-        border: 1px solid var(--line);
-        padding: 0.8rem 0.9rem;
-        border-radius: 16px;
-    }
-
+    /* Typography Overrides */
     p, label, .stCaption, .stMarkdown, .stText, span, div {
         color: var(--text);
+    }
+    
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--text) !important;
+        font-weight: 800 !important;
     }
     </style>
     """,
@@ -777,7 +769,7 @@ with st.sidebar:
 
     page = st.radio(
         "Navigate",
-        ["Overview", "Data Layers", "Upload Data", "Pipeline Status"],
+        ["Overview", "Data Layers", "Upload Data", "Pipeline Status", "Data Lineage"],
         label_visibility="collapsed",
     )
 
@@ -995,6 +987,10 @@ elif page == "Upload Data":
 
         if valid_files:
             st.success(f"{len(valid_files)} valid CSV file(s) ready for upload.")
+            
+            # Debugging info
+            st.info(f"Debug: IS_DOCKER = {IS_DOCKER}, Target Path = {INPUT_PATH}")
+            
             st.markdown(
                 "".join(
                     f'<span class="file-chip">{icon_svg("check", size=14, stroke="#1f8f5f")}{file.name}</span>'
@@ -1011,28 +1007,31 @@ elif page == "Upload Data":
             else:
                 action_label = "Upload and Start Pipeline" if selected_dag["mode"] == "instant" else "Upload and Queue for Scheduled Run"
                 if st.button(action_label, use_container_width=True):
-                    os.makedirs(INPUT_PATH, exist_ok=True)
-
-                    for file in valid_files:
-                        path = os.path.join(INPUT_PATH, file.name)
-                        with open(path, "wb") as output_file:
-                            output_file.write(file.getbuffer())
-
-                    st.success("Valid CSV files uploaded successfully.")
-
-                    file_to_process = valid_files[0].name
-                    if selected_dag["mode"] == "instant":
-                        st.info(f"Triggering {selected_dag['dag_id']} for {file_to_process}.")
-
-                        if trigger_airflow(selected_dag["dag_id"], file_to_process):
-                            st.success("Pipeline started successfully.")
-                            st.link_button("Open Airflow Dashboard", "http://localhost:8081", use_container_width=True)
+                    try:
+                        os.makedirs(INPUT_PATH, exist_ok=True)
+    
+                        for file in valid_files:
+                            path = os.path.join(INPUT_PATH, file.name)
+                            with open(path, "wb") as output_file:
+                                output_file.write(file.getbuffer())
+    
+                        st.success(f"Valid CSV files uploaded successfully to {INPUT_PATH}.")
+    
+                        file_to_process = valid_files[0].name
+                        if selected_dag["mode"] == "instant":
+                            st.info(f"Triggering {selected_dag['dag_id']} for {file_to_process}.")
+    
+                            if trigger_airflow(selected_dag["dag_id"], file_to_process):
+                                st.success("Pipeline started successfully.")
+                                st.link_button("Open Airflow Dashboard", "http://localhost:8081", use_container_width=True)
+                            else:
+                                st.error("Failed to trigger the DAG run.")
                         else:
-                            st.error("Failed to trigger the DAG run.")
-                    else:
-                        enqueue_scheduled_files([file.name for file in valid_files])
-                        st.success("Files added to the scheduled queue.")
-                        st.info("The scheduled DAG will pick these files up at its next scheduled run.")
+                            enqueue_scheduled_files([file.name for file in valid_files])
+                            st.success("Files added to the scheduled queue.")
+                            st.info("The scheduled DAG will pick these files up at its next scheduled run.")
+                    except Exception as e:
+                        st.error(f"Upload failed: {e}")
 
     queued_count = sum(
         1
@@ -1109,6 +1108,163 @@ elif page == "Pipeline Status":
                         st.rerun()
 
             st.markdown("<div style='height: 0.8rem;'></div>", unsafe_allow_html=True)
+
+elif page == "Data Lineage":
+    section_header("Data Lineage & Monitoring", "Trace your data from upload to dashboard", "database")
+    
+    metadata_base = METADATA_DIR
+    runs = []
+    if os.path.exists(metadata_base):
+        for item in os.listdir(metadata_base):
+            if item.startswith("run_"):
+                runs.append(item)
+    runs.sort(reverse=True)
+    
+    if not runs:
+        st.info("No pipeline runs found. Trigger a pipeline to generate metadata.")
+    else:
+        st.markdown(
+            """
+            <style>
+            .flow-box {
+                text-align: center; 
+                padding: 15px; 
+                border-radius: 12px;
+                background: #fff;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                border: 3px solid #ccc;
+                width: 180px;
+            }
+            .flow-success { border-color: #28a745; }
+            .flow-failed { border-color: #dc3545; }
+            .flow-pending { border-color: #ffc107; }
+            .flow-arrow {
+                text-align: center;
+                font-size: 24px;
+                color: #888;
+                margin: 10px 0;
+            }
+            </style>
+            """, unsafe_allow_html=True
+        )
+        selected_run = st.selectbox("Select Pipeline Run", runs)
+        run_dir = os.path.join(metadata_base, selected_run)
+        
+        def load_meta(layer):
+            p = os.path.join(run_dir, f"{layer}.json")
+            if os.path.exists(p):
+                with open(p, "r") as f:
+                    return json.load(f)
+            return None
+            
+        bronze_meta = load_meta("bronze")
+        silver_meta = load_meta("silver")
+        gold_meta = load_meta("gold")
+        
+        def get_status(meta):
+            if not meta: return "Pending"
+            return meta.get("status", "Unknown")
+            
+        b_status = get_status(bronze_meta)
+        s_status = get_status(silver_meta)
+        g_status = get_status(gold_meta)
+        
+        def get_color_class(status):
+            if status == "Success": return "flow-success"
+            if status == "FAILED": return "flow-failed"
+            return "flow-pending"
+            
+        st.subheader("Data Lineage Flow")
+        
+        st.markdown(f'''
+        <div style="display:flex; flex-direction:column; align-items:center;">
+            <div class="flow-box">
+                <b>CSV Upload</b><br/>📁 Source
+            </div>
+            <div class="flow-arrow">⬇️</div>
+            <div class="flow-box {get_color_class(b_status)}">
+                <b>Bronze Layer</b><br/>{b_status}
+            </div>
+            <div class="flow-arrow">⬇️</div>
+            <div class="flow-box {get_color_class(s_status)}">
+                <b>Silver Layer</b><br/>{s_status}
+            </div>
+            <div class="flow-arrow">⬇️</div>
+            <div class="flow-box {get_color_class(g_status)}">
+                <b>Gold Layer</b><br/>{g_status}
+            </div>
+            <div class="flow-arrow">⬇️</div>
+            <div class="flow-box">
+                <b>Dashboard</b><br/>📊 Analytics
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
+        
+        # Error Handling
+        for meta in [bronze_meta, silver_meta, gold_meta]:
+            if meta and meta.get("status") == "FAILED":
+                st.error(f"❌ {meta.get('layer')} Layer FAILED: {meta.get('exception', 'Unknown Error')}")
+                
+        st.divider()
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Pipeline Timeline")
+            timeline = []
+            timeline.append(f"CSV Uploaded -> Run: {selected_run}")
+            if bronze_meta:
+                timeline.append(f"Bronze Started: {bronze_meta.get('start_time')}")
+                timeline.append(f"Bronze Completed: {bronze_meta.get('end_time')}")
+            if silver_meta:
+                timeline.append(f"Silver Started: {silver_meta.get('start_time')}")
+                timeline.append(f"Silver Completed: {silver_meta.get('end_time')}")
+            if gold_meta:
+                timeline.append(f"Gold Started: {gold_meta.get('start_time')}")
+                timeline.append(f"Gold Completed: {gold_meta.get('end_time')}")
+            
+            for t in timeline:
+                st.markdown(f"`{t}`")
+                
+        with col2:
+            st.subheader("Data Quality Metrics")
+            up_rows = bronze_meta.get("input_rows", 0) if bronze_meta else 0
+            proc_rows = bronze_meta.get("output_rows", 0) if bronze_meta else 0
+            dup_rem = silver_meta.get("duplicates_removed", 0) if silver_meta else 0
+            null_fill = silver_meta.get("nulls_filled", 0) if silver_meta else 0
+            final_rows = silver_meta.get("rows_after", 0) if silver_meta else 0
+            
+            st.markdown(f"- **Rows Uploaded:** {up_rows:,}")
+            st.markdown(f"- **Rows Processed:** {proc_rows:,}")
+            st.markdown(f"- **Duplicates Removed:** {dup_rem:,}")
+            st.markdown(f"- **Null Values Filled:** {null_fill:,}")
+            st.markdown(f"- **Final Rows:** {final_rows:,}")
+            
+        st.divider()
+        st.subheader("Pipeline Summary")
+        summary_data = []
+        for meta in [bronze_meta, silver_meta, gold_meta]:
+            if meta:
+                summary_data.append({
+                    "Layer": meta.get("layer"),
+                    "Rows": meta.get("output_rows") or meta.get("rows_after") or meta.get("aggregation_count"),
+                    "Time": meta.get("duration"),
+                    "Status": meta.get("status")
+                })
+        if summary_data:
+            st.table(pd.DataFrame(summary_data))
+            
+        st.divider()
+        st.subheader("Metadata Explorer")
+        tab1, tab2, tab3 = st.tabs(["Bronze Layer", "Silver Layer", "Gold Layer"])
+        with tab1:
+            if bronze_meta: st.json(bronze_meta)
+            else: st.info("No Bronze metadata available.")
+        with tab2:
+            if silver_meta: st.json(silver_meta)
+            else: st.info("No Silver metadata available.")
+        with tab3:
+            if gold_meta: st.json(gold_meta)
+            else: st.info("No Gold metadata available.")
 
 st.markdown("---")
 st.markdown(

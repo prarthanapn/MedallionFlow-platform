@@ -1,0 +1,20 @@
+{
+    "layer": "Silver",
+    "rows_before": 10,
+    "rows_after": 9,
+    "duplicates_removed": 1,
+    "nulls_filled": 8,
+    "transformations": [
+        "Remove index columns",
+        "Deduplicate rows",
+        "Fill null values",
+        "Add _processed_at timestamp"
+    ],
+    "start_time": "2026-07-01 16:05:30",
+    "end_time": "2026-07-01 16:06:05",
+    "duration": "35.44 sec",
+    "status": "Success",
+    "job": "silver_job",
+    "output": "delta/silver",
+    "app_name": "SilverJob"
+}

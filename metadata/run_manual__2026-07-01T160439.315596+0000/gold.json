@@ -1,0 +1,18 @@
+{
+    "layer": "Gold",
+    "kpis_generated": [
+        "Survival Status Added",
+        "Partitioned by Pclass (if exists)"
+    ],
+    "aggregation_count": 1,
+    "output_datasets": [
+        "gold_partitioned_by_Pclass"
+    ],
+    "start_time": "2026-07-01 16:06:26",
+    "end_time": "2026-07-01 16:07:05",
+    "duration": "38.69 sec",
+    "status": "Success",
+    "job": "gold_job",
+    "output": "delta/gold",
+    "app_name": "GoldJob"
+}
