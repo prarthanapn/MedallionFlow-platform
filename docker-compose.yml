@@ -172,9 +172,21 @@ services:
       - ./delta_lake:/opt/airflow/data/delta
       - ./spark:/opt/airflow/spark
       - ./logs:/opt/airflow/logs
+      - ./metadata:/opt/airflow/metadata
     ports:
       - "8081:8080"  # Host 8081 maps to container 8080
-    command: airflow webserver
+    command: >
+      bash -c "
+      airflow db init &&
+      airflow users create
+      --username admin
+      --password admin
+      --firstname admin
+      --lastname admin
+      --role Admin
+      --email admin@example.com &&
+      airflow webserver
+      "
     networks:
       - data_platform
 
@@ -201,7 +213,13 @@ services:
       - ./delta_lake:/opt/airflow/data/delta
       - ./spark:/opt/airflow/spark
       - ./logs:/opt/airflow/logs
-    command: airflow scheduler
+      - ./metadata:/opt/airflow/metadata
+    command: >
+      bash -c "
+      rm -f /opt/airflow/airflow-scheduler.pid &&
+      while ! airflow db check; do sleep 5; done &&
+      airflow scheduler
+      "
     networks:
       - data_platform
 
@@ -220,6 +238,7 @@ services:
       - ./spark/spark_jobs:/opt/spark_jobs
       - ./input_data:/opt/airflow/data/input
       - ./delta_lake:/opt/airflow/data/delta
+      - ./metadata:/opt/airflow/metadata
     networks:
       - data_platform
 
@@ -235,6 +254,7 @@ services:
       - ./spark/spark_jobs:/opt/spark_jobs
       - ./input_data:/opt/airflow/data/input
       - ./delta_lake:/opt/airflow/data/delta
+      - ./metadata:/opt/airflow/metadata
     networks:
       - data_platform
 
@@ -252,6 +272,7 @@ services:
       - ./delta_lake:/app/data/delta
       - ./logs:/app/logs
       - ./input_data:/app/data/input
+      - ./metadata:/app/metadata
     networks:
       - data_platform
 

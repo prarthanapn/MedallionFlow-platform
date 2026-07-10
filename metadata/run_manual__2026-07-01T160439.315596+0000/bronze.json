@@ -1,0 +1,63 @@
+{
+    "layer": "Bronze",
+    "source": "sample_medallionflow_input.csv",
+    "input_rows": 10,
+    "output_rows": 10,
+    "schema": [
+        {
+            "name": "PassengerId",
+            "type": "IntegerType()"
+        },
+        {
+            "name": "Survived",
+            "type": "IntegerType()"
+        },
+        {
+            "name": "Pclass",
+            "type": "IntegerType()"
+        },
+        {
+            "name": "Name",
+            "type": "StringType()"
+        },
+        {
+            "name": "Sex",
+            "type": "StringType()"
+        },
+        {
+            "name": "Age",
+            "type": "IntegerType()"
+        },
+        {
+            "name": "SibSp",
+            "type": "IntegerType()"
+        },
+        {
+            "name": "Parch",
+            "type": "IntegerType()"
+        },
+        {
+            "name": "Ticket",
+            "type": "StringType()"
+        },
+        {
+            "name": "Fare",
+            "type": "DoubleType()"
+        },
+        {
+            "name": "Cabin",
+            "type": "StringType()"
+        },
+        {
+            "name": "Embarked",
+            "type": "StringType()"
+        }
+    ],
+    "start_time": "2026-07-01 16:04:46",
+    "end_time": "2026-07-01 16:05:17",
+    "duration": "31.01 sec",
+    "status": "Success",
+    "job": "bronze_job",
+    "output": "delta/bronze",
+    "app_name": "BronzeJob"
+}

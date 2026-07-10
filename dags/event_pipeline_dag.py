@@ -96,21 +96,19 @@ def notify_stakeholders(**context):
 
 ingest_bronze = BashOperator(
     task_id='ingest_to_bronze',
-    # Get file_name from DAG run config, default to 'titanic.csv' for manual runs
-    # Submit the job to the Spark cluster (Client Mode is default and required for Standalone Python)
-    bash_command="spark-submit --packages io.delta:delta-core_2.12:2.4.0,io.delta:delta-storage:2.4.0 --conf spark.driver.host=airflow-scheduler --master spark://spark-master:7077 /opt/airflow/spark/bronze_job.py '{{ (dag_run.conf or {}).get(\"file_name\", \"titanic.csv\") }}'",
+    bash_command="spark-submit --packages io.delta:delta-core_2.12:2.4.0,io.delta:delta-storage:2.4.0 --conf spark.driver.host=airflow-scheduler --master spark://spark-master:7077 /opt/airflow/spark/bronze_job.py '{{ (dag_run.conf or {}).get(\"file_name\", \"titanic.csv\") }}' '{{ run_id }}'",
     dag=dag,
 )
 
 bronze_to_silver = BashOperator(
     task_id='bronze_to_silver',
-    bash_command='spark-submit --packages io.delta:delta-core_2.12:2.4.0,io.delta:delta-storage:2.4.0 --conf spark.driver.host=airflow-scheduler --master spark://spark-master:7077 /opt/airflow/spark/silver_job.py',
+    bash_command="spark-submit --packages io.delta:delta-core_2.12:2.4.0,io.delta:delta-storage:2.4.0 --conf spark.driver.host=airflow-scheduler --master spark://spark-master:7077 /opt/airflow/spark/silver_job.py '{{ run_id }}'",
     dag=dag,
 )
 
 silver_to_gold = BashOperator(
     task_id='silver_to_gold',
-    bash_command='spark-submit --packages io.delta:delta-core_2.12:2.4.0,io.delta:delta-storage:2.4.0 --conf spark.driver.host=airflow-scheduler --master spark://spark-master:7077 /opt/airflow/spark/gold_job.py',
+    bash_command="spark-submit --packages io.delta:delta-core_2.12:2.4.0,io.delta:delta-storage:2.4.0 --conf spark.driver.host=airflow-scheduler --master spark://spark-master:7077 /opt/airflow/spark/gold_job.py '{{ run_id }}'",
     dag=dag,
 )
 
